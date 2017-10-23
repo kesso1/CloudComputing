@@ -41,12 +41,11 @@ $Interface = New-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName
 # Compute
 
 ## Setup local VM object
-$username = "sampleCorpAdmin"
-$password = "1234%%abcd" | convertto-securestring
-$Credential = new-object -typename System.Management.Automation.PSCredential -argumentlist $username, $password
+$clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
+$clientCred = New-Object -TypeName pscredential –ArgumentList "sampleCorpAdmin", $clientUserPw 
 
 $VirtualMachine = New-AzureRmVMConfig -VMName $VMName -VMSize $VMSize
-$VirtualMachine = Set-AzureRmVMOperatingSystem -VM $VirtualMachine -Windows -ComputerName $ComputerName -Credential $Credential -ProvisionVMAgent -EnableAutoUpdate
+$VirtualMachine = Set-AzureRmVMOperatingSystem -VM $VirtualMachine -Windows -ComputerName $ComputerName -Credential $clientCred -ProvisionVMAgent -EnableAutoUpdate
 $VirtualMachine = Set-AzureRmVMSourceImage -VM $VirtualMachine -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2016-Datacenter -Version "latest"
 $VirtualMachine = Add-AzureRmVMNetworkInterface -VM $VirtualMachine -Id $Interface.Id
 $OSDiskUri = $StorageAccount.PrimaryEndpoints.Blob.ToString() + "vhds/" + $OSDiskName + ".vhd"
