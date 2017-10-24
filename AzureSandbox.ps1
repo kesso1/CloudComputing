@@ -14,17 +14,24 @@ $StorageName = "samplecorpstorage"
 $StorageType = "Standard_GRS"
 
 ## Network
-$InterfaceName = "ServerInterface06"
+$InterfaceNameSql = "Int06Sql"
+$InterfaceNameIIS = "Int06IIS"
 $Subnet1Name = "Subnet1"
 $VNetName = "VNet09"
 $VNetAddressPrefix = "10.0.0.0/16"
 $VNetSubnetAddressPrefix = "10.0.0.0/24"
 
 ## Compute
-$VMName = "VirtualMachine12"
-$ComputerName = "Server22"
+$VMNameSql = "Sql2017"
+$ComputerNameSql = "SqlServer2017"
+$VMNameIIS = "IIS2017"
+$ComputerNameIIS = "IISServer2017"
 $VMSize = "Standard_A2"
-$OSDiskName = $VMName + "OSDisk"
+$clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
+$clientCred = New-Object -TypeName pscredential –ArgumentList "sampleCorpAdmin", $clientUserPw 
+$OSDiskNameSql = $VMName + "OSDisk"
+$OSDiskNameIIS = $VMName + "OSDisk"
+
 
 # Resource Group
 New-AzureRmResourceGroup -Name $ResourceGroupName -Location $Location
@@ -32,25 +39,40 @@ New-AzureRmResourceGroup -Name $ResourceGroupName -Location $Location
 # Storage
 $StorageAccount = New-AzureRmStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageName -Type $StorageType -Location $Location
 
-# Network
-$PIp = New-AzureRmPublicIpAddress -Name $InterfaceName -ResourceGroupName $ResourceGroupName -Location $Location -AllocationMethod Dynamic
-$SubnetConfig = New-AzureRmVirtualNetworkSubnetConfig -Name $Subnet1Name -AddressPrefix $VNetSubnetAddressPrefix
-$VNet = New-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -Location $Location -AddressPrefix $VNetAddressPrefix -Subnet $SubnetConfig
-$Interface = New-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName $ResourceGroupName -Location $Location -SubnetId $VNet.Subnets[0].Id -PublicIpAddressId $PIp.Id
+# Network SQL
+$PIpSql = New-AzureRmPublicIpAddress -Name $InterfaceNameSql -ResourceGroupName $ResourceGroupName -Location $Location -AllocationMethod Dynamic
+$SubnetConfigSql = New-AzureRmVirtualNetworkSubnetConfig -Name $Subnet1Name -AddressPrefix $VNetSubnetAddressPrefix
+$VNetSql = New-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -Location $Location -AddressPrefix $VNetAddressPrefix -Subnet $SubnetConfigSql
+$InterfaceSql = New-AzureRmNetworkInterface -Name $InterfaceNameSql -ResourceGroupName $ResourceGroupName -Location $Location -SubnetId $VNetSql.Subnets[0].Id -PublicIpAddressId $PIpSql.Id
 
 # Compute
-
-## Setup local VM object
-$clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
-$clientCred = New-Object -TypeName pscredential –ArgumentList "sampleCorpAdmin", $clientUserPw 
-
-$VirtualMachine = New-AzureRmVMConfig -VMName $VMName -VMSize $VMSize
-$VirtualMachine = Set-AzureRmVMOperatingSystem -VM $VirtualMachine -Windows -ComputerName $ComputerName -Credential $clientCred -ProvisionVMAgent -EnableAutoUpdate
-$VirtualMachine = Set-AzureRmVMSourceImage -VM $VirtualMachine -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2016-Datacenter -Version "latest"
-$VirtualMachine = Add-AzureRmVMNetworkInterface -VM $VirtualMachine -Id $Interface.Id
-$OSDiskUri = $StorageAccount.PrimaryEndpoints.Blob.ToString() + "vhds/" + $OSDiskName + ".vhd"
-$VirtualMachine = Set-AzureRmVMOSDisk -VM $VirtualMachine -Name $OSDiskName -VhdUri $OSDiskUri -CreateOption FromImage
+## Setup sql VM object
+$VirtualMachineSql = New-AzureRmVMConfig -VMName $VMNameSql -VMSize $VMSize
+$VirtualMachineSql = Set-AzureRmVMOperatingSystem -VM $VirtualMachineSql -Windows -ComputerName $ComputerNameSql -Credential $clientCred -ProvisionVMAgent -EnableAutoUpdate
+$VirtualMachineSql = Set-AzureRmVMSourceImage -VM $VirtualMachineSql -PublisherName MicrosoftSQLServer -Offer SQL2017-WS2016 -Skus Standard -Version "latest"
+$VirtualMachineSql = Add-AzureRmVMNetworkInterface -VM $VirtualMachineSql -Id $InterfaceSql.Id
+$OSDiskUri = $StorageAccount.PrimaryEndpoints.Blob.ToString() + "vhds/" + $OSDiskNameSql + ".vhd"
+$VirtualMachineSql = Set-AzureRmVMOSDisk -VM $VirtualMachineSql -Name $OSDiskNameSql -VhdUri $OSDiskUri -CreateOption FromImage
 
 ## Create the VM in Azure
-$newVM = New-AzureRmVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $VirtualMachine
-$newVM
+$vmSQL = New-AzureRmVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $VirtualMachineSql
+
+#Network IIS
+$PIpIIS = New-AzureRmPublicIpAddress -Name $InterfaceNameIIS -ResourceGroupName $ResourceGroupName -Location $Location -AllocationMethod Dynamic
+$SubnetConfigIIS = New-AzureRmVirtualNetworkSubnetConfig -Name $Subnet1Name -AddressPrefix $VNetSubnetAddressPrefix
+$VNetIIS = New-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -Location $Location -AddressPrefix $VNetAddressPrefix -Subnet $SubnetConfigIIS
+$InterfaceIIS = New-AzureRmNetworkInterface -Name $InterfaceNameIIS -ResourceGroupName $ResourceGroupName -Location $Location -SubnetId $VNetIIS.Subnets[0].Id -PublicIpAddressId $PIpIIS.Id
+
+# Compute
+## Setup sql VM object
+$VirtualMachineIIS = New-AzureRmVMConfig -VMName $VMNameIIS -VMSize $VMSize
+$VirtualMachineIIS = Set-AzureRmVMOperatingSystem -VM $VirtualMachineIIS -Windows -ComputerName $ComputerNameIIS -Credential $clientCred -ProvisionVMAgent -EnableAutoUpdate
+$VirtualMachineIIS = Set-AzureRmVMSourceImage -VM $VirtualMachine -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2016-Datacenter -Version "latest"
+$VirtualMachineIIS = Add-AzureRmVMNetworkInterface -VM $VirtualMachineIIS -Id $InterfaceIIS.Id
+$OSDiskUri = $StorageAccount.PrimaryEndpoints.Blob.ToString() + "vhds/" + $OSDiskNameIIS + ".vhd"
+$VirtualMachineIIS = Set-AzureRmVMOSDisk -VM $VirtualMachineIIS -Name $OSDiskNameSql -VhdUri $OSDiskUri -CreateOption FromImage
+
+## Create the VM in Azure
+$vmIIS = New-AzureRmVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $VirtualMachineIIS
+
+#Remove-AzureRmResourceGroup -Name $ResourceGroupName
