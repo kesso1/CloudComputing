@@ -306,16 +306,13 @@ function Invoke-AzureRmVmScript {
         }
     }
 }
-
+$stgContext = New-AzureStorageContext -StorageAccountName "ottilabdiag788" -StorageAccountKey "cGglCgY/5V/9ayRS5eqjJo511dJWSKbdLqFeOUT3jf/4njzkopgQMnwx3dDpuc0zQnXuDLvvSnWCm7dW6o+a1g=="
+New-AzureStorageContainer -Name "scripts" -Permission Container -Context $stgContext
 $params = @{
 	ResourceGroupName = 'ottilab'
 	VMName = 'ottilabclient'
 	StorageAccountName = 'ottilabdiag788'
 }
 Invoke-AzureRmVmScript @params -ForceExtension -ScriptBlock {
-    "Hello world! Running on $(hostname)"
-    Get-Host
-	Write-Error "This is an error"
-	Write-Warning "This is a warning"
-	Write-Verbose "This is verbose!"
+    Enable-PSRemoting -Force
 }
