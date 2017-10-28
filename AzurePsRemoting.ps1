@@ -1,3 +1,4 @@
 Enable-PSRemoting -Force
-#On Client who access
-winrm s winrm/config/client '@{TrustedHosts="ottilabclient.northeurope.cloudapp.azure.com"}'
+#Accessing client configuration
+#winrm s winrm/config/client '@{TrustedHosts="ottilabclient.northeurope.cloudapp.azure.com"}'
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value '*'
