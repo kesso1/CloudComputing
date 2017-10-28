@@ -276,7 +276,8 @@ Function CreateVMs(){
     $StorageAccount = New-AzureRmStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageName -Type $StorageType -Location $Location
 
     #Network per Role
-    $PIp = New-AzureRmPublicIpAddress -Name $InterfaceName -ResourceGroupName $ResourceGroupName -Location $Location -AllocationMethod Dynamic
+    $PIp = New-AzureRmPublicIpAddress -Name $InterfaceName -ResourceGroupName $ResourceGroupName -Location $Location -AllocationMethod Dynamic -DomainNameLabel "samplecorp$vmRole"
+    
     $SubnetConfig = New-AzureRmVirtualNetworkSubnetConfig -Name $Subnet1Name -AddressPrefix $VNetSubnetAddressPrefix
     $VNet = New-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -Location $Location -AddressPrefix $VNetAddressPrefix -Subnet $SubnetConfig
     $Interface = New-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName $ResourceGroupName -Location $Location -SubnetId $VNet.Subnets[0].Id -PublicIpAddressId $PIp.Id
@@ -295,7 +296,7 @@ Function CreateVMs(){
     $VirtualMachine = New-AzureRmVMConfig -VMName $VMName -VMSize $VMSize
     $VirtualMachine = Set-AzureRmVMOperatingSystem -VM $VirtualMachine -Windows -ComputerName $ComputerName -Credential $clientCred -ProvisionVMAgent -EnableAutoUpdate
     switch ($vmRole){
-        ""{
+        "dc"{
             $VirtualMachine = Set-AzureRmVMSourceImage -VM $VirtualMachine -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2016-Datacenter -Version "latest"
             break
         } 
@@ -335,39 +336,26 @@ Function CreateVMs(){
     
 }
 import-module AzureRM
-
-$pass = ConvertTo-SecureString "W80RJe8mqPuITJLt2qz/roEATJ9Bxo8TSoxjSurWQ=" -AsPlainText -Force
-$cred = New-Object -TypeName pscredential -ArgumentList "4b3273ca-d65c-47bc-979a-9fd70c03fc44", $pass 
-Login-AzureRmAccount -Credential $cred -ServicePrincipal -TenantId 38e69ad1-2007-434c-880e-4f9c1c98ac4b -SubscriptionId 9bc20da0-8454-4a4e-ae08-ada2180eb46e
+$pass = ConvertTo-SecureString "YN5/u2KC0EwiwOoLGqiaGByHvB3DrFrlqKTSbAiAKw0=" -AsPlainText -Force
+#Service Principal ID is defined in Azure Automation - Auszuführendes Konto
+#Key is defined in Azure Active Directory - Automation - Keys
+$cred = New-Object -TypeName pscredential -ArgumentList "95229bfc-64b4-479c-be59-668ee52e8553", $pass
+Login-AzureRmAccount -Credential $cred -ServicePrincipal -TenantId "38e69ad1-2007-434c-880e-4f9c1c98ac4b" -SubscriptionId "9bc20da0-8454-4a4e-ae08-ada2180eb46e"
 $ResourceGroupName = "SampleCorp"
 # Deploy VM's
 $Location = "NorthEurope"
 $resGroup = New-AzureRmResourceGroup -Name $ResourceGroupName -Location $Location
-CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "" -Location $Location
+CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "dc" -Location $Location
 
 function installAD(){
-    #Install Role
-    #$ipCfg = Get-AzureRmNetworkInterface -ResourceGroupName SampleCorp | Get-AzureRmNetworkInterfaceIpConfig
-    $publicIP = Get-AzureRmVM -ResourceGroupName $ResourceGroupName -Name "vm-2017$vmRole" | Get-AzureRmPublicIpAddress
+    #Install ADDS Role
     $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
     $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw 
-    Invoke-Command -ComputerName $publicIP -Credential $clientCred -ScriptBlock {
+    Invoke-Command -ComputerName samplecorpdc.northeurope.cloudapp.azure.com -Credential $clientCred -ScriptBlock {
         install-windowsfeature AD-Domain-Services
         Import-Module ADDSDeployment
         Install-ADDSForest -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainName "samplecorp.ch" -DomainNetbiosName "SAMPLECORP" -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$false -SysvolPath "C:\Windows\SYSVOL" -Force:$true -SafeModeAdministratorPassword $clientUserPw    
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 #Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
