@@ -335,6 +335,19 @@ Function CreateVMs(){
     }    
     
 }
+
+function InstallAD(){
+    #Install ADDS Role
+    $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
+    $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw 
+    Invoke-Command -ComputerName samplecorpdc.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $clientUserPw -ScriptBlock {
+        param($clientUserPw) 
+        Install-windowsfeature AD-Domain-Services
+        Import-Module ADDSDeployment
+        Install-ADDSForest -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainName "samplecorp.local" -DomainNetbiosName "SAMPLECORP" -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$false -SysvolPath "C:\Windows\SYSVOL" -Force:$true -SafeModeAdministratorPassword $clientUserPw
+    }
+}
+
 import-module AzureRM
 $pass = ConvertTo-SecureString "YN5/u2KC0EwiwOoLGqiaGByHvB3DrFrlqKTSbAiAKw0=" -AsPlainText -Force
 #Service Principal ID is defined in Azure Automation - Auszuführendes Konto
@@ -342,20 +355,21 @@ $pass = ConvertTo-SecureString "YN5/u2KC0EwiwOoLGqiaGByHvB3DrFrlqKTSbAiAKw0=" -A
 $cred = New-Object -TypeName pscredential -ArgumentList "95229bfc-64b4-479c-be59-668ee52e8553", $pass
 Login-AzureRmAccount -Credential $cred -ServicePrincipal -TenantId "38e69ad1-2007-434c-880e-4f9c1c98ac4b" -SubscriptionId "9bc20da0-8454-4a4e-ae08-ada2180eb46e"
 $ResourceGroupName = "SampleCorp"
-# Deploy VM's
+# Deploy resource group and vm's
 $Location = "NorthEurope"
 $resGroup = New-AzureRmResourceGroup -Name $ResourceGroupName -Location $Location
 CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "dc" -Location $Location
+CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "iis" -Location $Location
+CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "sql" -Location $Location
 
-function installAD(){
-    #Install ADDS Role
-    $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
-    $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw 
-    Invoke-Command -ComputerName samplecorpdc.northeurope.cloudapp.azure.com -Credential $clientCred -ScriptBlock {
-        install-windowsfeature AD-Domain-Services
-        Import-Module ADDSDeployment
-        Install-ADDSForest -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainName "samplecorp.ch" -DomainNetbiosName "SAMPLECORP" -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$false -SysvolPath "C:\Windows\SYSVOL" -Force:$true -SafeModeAdministratorPassword $clientUserPw    
-    }
-}
+InstallAD
 
-#Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
+# function installIIS(){
+#     $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
+#     $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw 
+#     Invoke-Command -ComputerName samplecorpiis.northeurope.cloudapp.azure.com -Credential $clientCred -ScriptBlock {
+#         Get-Host
+#     }
+# }
+
+# Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
