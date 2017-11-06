@@ -336,15 +336,24 @@ Function CreateVMs(){
     
 }
 
-function InstallAD(){
+function InstallAD($domainName){
     #Install ADDS Role
     $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
     $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw 
-    Invoke-Command -ComputerName samplecorpdc.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $clientUserPw -ScriptBlock {
-        param($clientUserPw) 
+    Invoke-Command -ComputerName samplecorpdc.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $clientUserPw, $domainName -ScriptBlock {
+        param($clientUserPw, $domainName) 
         Install-windowsfeature AD-Domain-Services
         Import-Module ADDSDeployment
-        Install-ADDSForest -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainName "samplecorp.local" -DomainNetbiosName "SAMPLECORP" -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$false -SysvolPath "C:\Windows\SYSVOL" -Force:$true -SafeModeAdministratorPassword $clientUserPw
+        Install-ADDSForest -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainName $domainName -DomainNetbiosName "SAMPLECORP" -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$false -SysvolPath "C:\Windows\SYSVOL" -Force:$true -SafeModeAdministratorPassword $clientUserPw
+    }
+}
+function InstallIIS($domainName){
+    $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
+    $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw
+    Invoke-Command -ComputerName samplecorpiis.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $domainName -ScriptBlock {
+        $domainUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
+        $domainCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $domainUserPw
+        Add-Computer -DomainName $domainName -Credential $domainCred -Restart -Force
     }
 }
 
@@ -355,6 +364,8 @@ $pass = ConvertTo-SecureString "YN5/u2KC0EwiwOoLGqiaGByHvB3DrFrlqKTSbAiAKw0=" -A
 $cred = New-Object -TypeName pscredential -ArgumentList "95229bfc-64b4-479c-be59-668ee52e8553", $pass
 Login-AzureRmAccount -Credential $cred -ServicePrincipal -TenantId "38e69ad1-2007-434c-880e-4f9c1c98ac4b" -SubscriptionId "9bc20da0-8454-4a4e-ae08-ada2180eb46e"
 $ResourceGroupName = "SampleCorp"
+$domainName = "samplecorp.local"
+
 # Deploy resource group and vm's
 $Location = "NorthEurope"
 $resGroup = New-AzureRmResourceGroup -Name $ResourceGroupName -Location $Location
@@ -362,14 +373,7 @@ CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "dc" -Location $Location
 CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "iis" -Location $Location
 CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "sql" -Location $Location
 
-InstallAD
-
-# function installIIS(){
-#     $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
-#     $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw 
-#     Invoke-Command -ComputerName samplecorpiis.northeurope.cloudapp.azure.com -Credential $clientCred -ScriptBlock {
-#         Get-Host
-#     }
-# }
+InstallAD -domainName $domainName
+InstallIIS -domainName $domainName
 
 # Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
