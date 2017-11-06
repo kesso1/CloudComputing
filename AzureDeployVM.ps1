@@ -351,6 +351,7 @@ function InstallIIS($domainName){
     $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
     $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw
     Invoke-Command -ComputerName samplecorpiis.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $domainName -ScriptBlock {
+        param($domainName)
         $domainUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
         $domainCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $domainUserPw
         Add-Computer -DomainName $domainName -Credential $domainCred -Restart -Force
@@ -374,6 +375,6 @@ CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "iis" -Location $Locatio
 CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "sql" -Location $Location
 
 InstallAD -domainName $domainName
-InstallIIS -domainName $domainName
+#InstallIIS -domainName $domainName
 
-# Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
+#Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
