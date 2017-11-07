@@ -363,7 +363,7 @@ function InstallIIS($domainName){
     Invoke-Command -ComputerName samplecorpiis.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $domainName -ScriptBlock {
         param($domainName)
         $domainUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
-        $domainCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $domainUserPw
+        $domainCred = New-Object -TypeName pscredential -ArgumentList "samplecorp\sampleCorpAdmin", $domainUserPw
         Add-Computer -DomainName $domainName -Credential $domainCred -Restart -Force
     }
 }
@@ -391,6 +391,11 @@ $VNet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGr
 $VNet.DhcpOptions.DnsServers = "10.0.0.4"
 Set-AzureRmVirtualNetwork -VirtualNetwork $VNet
 
-#InstallIIS -domainName $domainName
+#Restart VM's to get DNS settings
+Get-AzureRmVM -ResourceGroupName $ResourceGroupName | % {
+    Restart-AzureRmVM -ResourceGroupName $ResourceGroupName -Name $_.Name
+}
 
-Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
+InstallIIS -domainName $domainName
+
+#Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
