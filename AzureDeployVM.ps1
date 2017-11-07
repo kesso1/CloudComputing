@@ -262,7 +262,7 @@ Function CreateVMs(){
     ## Network per Role
     $InterfaceName = "Int06$vmRole"
     $Subnet1Name = "Subnet1"
-    $VNetName = "VNet09$vmRole"
+    $VNetName = "VNet09"
     $VNetAddressPrefix = "10.0.0.0/16"
     $VNetSubnetAddressPrefix = "10.0.0.0/24"
 
@@ -277,9 +277,18 @@ Function CreateVMs(){
 
     #Network per Role
     $PIp = New-AzureRmPublicIpAddress -Name $InterfaceName -ResourceGroupName $ResourceGroupName -Location $Location -AllocationMethod Dynamic -DomainNameLabel "samplecorp$vmRole"
-    
-    $SubnetConfig = New-AzureRmVirtualNetworkSubnetConfig -Name $Subnet1Name -AddressPrefix $VNetSubnetAddressPrefix
-    $VNet = New-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -Location $Location -AddressPrefix $VNetAddressPrefix -Subnet $SubnetConfig
+    if ($vmRole -eq "dc"){
+        $SubnetConfig = New-AzureRmVirtualNetworkSubnetConfig -Name $Subnet1Name -AddressPrefix $VNetSubnetAddressPrefix
+        $VNet = New-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -Location $Location -AddressPrefix $VNetAddressPrefix -Subnet $SubnetConfig
+        # # Set static ip address
+        # $nic = Get-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName $ResourceGroupName
+        # $nic.IpConfigurations[0].PrivateIpAllocationMethod = "Static"
+        # $nic.IpConfigurations[0].PrivateIpAddress = "10.0.0.4"
+        # Set-AzureRmNetworkInterface -NetworkInterface $nic
+    }
+    else{
+        $VNet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName
+    }
     $Interface = New-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName $ResourceGroupName -Location $Location -SubnetId $VNet.Subnets[0].Id -PublicIpAddressId $PIp.Id
 
     ## Create FW-Rule for WinRM (WinRM and RDP)
@@ -345,6 +354,7 @@ function InstallAD($domainName){
         Install-windowsfeature AD-Domain-Services
         Import-Module ADDSDeployment
         Install-ADDSForest -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainName $domainName -DomainNetbiosName "SAMPLECORP" -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$false -SysvolPath "C:\Windows\SYSVOL" -Force:$true -SafeModeAdministratorPassword $clientUserPw
+        #Remove-DnsServerForwarder -IPAddress 10.0.0.8 -PassThru
     }
 }
 function InstallIIS($domainName){
@@ -372,9 +382,15 @@ $Location = "NorthEurope"
 $resGroup = New-AzureRmResourceGroup -Name $ResourceGroupName -Location $Location
 CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "dc" -Location $Location
 CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "iis" -Location $Location
-CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "sql" -Location $Location
+# CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "sql" -Location $Location
 
 InstallAD -domainName $domainName
+# Set DNS Server for virtual network
+$VNetName = "VNet09"
+$VNet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName
+$VNet.DhcpOptions.DnsServers = "10.0.0.4"
+Set-AzureRmVirtualNetwork -VirtualNetwork $VNet
+
 #InstallIIS -domainName $domainName
 
-#Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
+Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
