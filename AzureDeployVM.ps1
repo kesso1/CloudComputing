@@ -395,7 +395,10 @@ Set-AzureRmVirtualNetwork -VirtualNetwork $VNet
 Get-AzureRmVM -ResourceGroupName $ResourceGroupName | % {
     Restart-AzureRmVM -ResourceGroupName $ResourceGroupName -Name $_.Name
 }
-
+# Wait for WinRM Service IIS
+while ($winRmCheck -eq $null){
+	$winRmCheck = Test-WSMan -Computername "samplecorpiis.northeurope.cloudapp.azure.com" -ErrorAction Ignore
+}
 InstallIIS -domainName $domainName
 
 #Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
