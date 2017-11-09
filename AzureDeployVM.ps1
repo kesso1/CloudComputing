@@ -363,7 +363,9 @@ function InstallIIS($domainName){
     Invoke-Command -ComputerName samplecorpiis.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $domainName -ScriptBlock {
         param($domainName)
         $domainUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
-        $domainCred = New-Object -TypeName pscredential -ArgumentList "samplecorp\sampleCorpAdmin", $domainUserPw
+        $domainCred = New-Object -TypeName pscredential -ArgumentList "$domainName\sampleCorpAdmin", $domainUserPw
+        add-windowsfeature Web-Server, Web-Security, Web-Filtering, Web-Windows-Auth, Web-Common-Http, Web-Http-Errors, Web-Static-Content, Web-Http-Redirect, Web-App-Dev, Web-Net-Ext, Web-Net-Ext45, Web-ASP, Web-Asp-Net, Web-Asp-Net45, Web-Mgmt-Console
+        while ((Test-Connection -ComputerName $domainName -Quiet) -eq $false){ Start-Sleep -Seconds 5 }
         Add-Computer -DomainName $domainName -Credential $domainCred -Restart -Force
     }
 }
@@ -399,6 +401,9 @@ Get-AzureRmVM -ResourceGroupName $ResourceGroupName | % {
 while ($winRmCheck -eq $null){
 	$winRmCheck = Test-WSMan -Computername "samplecorpiis.northeurope.cloudapp.azure.com" -ErrorAction Ignore
 }
+Write-host "Trying to install IIS and join domain..."
+Start-Sleep -Seconds 60
 InstallIIS -domainName $domainName
+Write-host "IIS install / domain join done"
 
 #Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
