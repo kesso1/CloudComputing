@@ -1,4 +1,3 @@
-
 function Invoke-AzureRmVmScript {
         [cmdletbinding()]
     param(
@@ -235,7 +234,6 @@ function Invoke-AzureRmVmScript {
         }
     }
 }
-
 Function CreateVMs(){
     param(
         # Parameter help description
@@ -247,14 +245,10 @@ Function CreateVMs(){
         $ResourceGroupName,
         [Parameter(Mandatory=$true)]
         [string]
-        $Location
-
+        $Location,
+        [Parameter(Mandatory=$true)]
+        $ClientCred
     )
-    # Variables All VM's
-    ## Global
-    $StorageType = "Standard_GRS"
-    $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
-    $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw 
     
     ## Storage per ROle
     $StorageName = "samplecorpstorage$vmRole"
@@ -280,11 +274,6 @@ Function CreateVMs(){
     if ($vmRole -eq "dc"){
         $SubnetConfig = New-AzureRmVirtualNetworkSubnetConfig -Name $Subnet1Name -AddressPrefix $VNetSubnetAddressPrefix
         $VNet = New-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName -Location $Location -AddressPrefix $VNetAddressPrefix -Subnet $SubnetConfig
-        # # Set static ip address
-        # $nic = Get-AzureRmNetworkInterface -Name $InterfaceName -ResourceGroupName $ResourceGroupName
-        # $nic.IpConfigurations[0].PrivateIpAllocationMethod = "Static"
-        # $nic.IpConfigurations[0].PrivateIpAddress = "10.0.0.4"
-        # Set-AzureRmNetworkInterface -NetworkInterface $nic
     }
     else{
         $VNet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName
@@ -345,42 +334,62 @@ Function CreateVMs(){
     
 }
 
-function InstallADNode($domainName){
+function InstallADNode(){
     #Install ADDS Role
-    $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
-    $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw 
-    Invoke-Command -ComputerName samplecorpdc.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $clientUserPw, $domainName -ScriptBlock {
-        param($clientUserPw, $domainName) 
+    param(
+        # Parameter help description
+        [Parameter(Mandatory=$true)]
+        [string]
+        $domainName,
+        [Parameter(Mandatory=$true)]
+        $ClientCred,
+        [Parameter(Mandatory=$true)]
+        $domainAdminPw
+    )
+    Invoke-Command -ComputerName samplecorpdc.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $domainAdminPw, $domainName -ScriptBlock {
+        param($domainAdminPw, $domainName) 
         Install-windowsfeature AD-Domain-Services
         Import-Module ADDSDeployment
-        Install-ADDSForest -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainName $domainName -DomainNetbiosName "SAMPLECORP" -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$false -SysvolPath "C:\Windows\SYSVOL" -Force:$true -SafeModeAdministratorPassword $clientUserPw
+        Install-ADDSForest -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012R2" -DomainName $domainName -DomainNetbiosName "SAMPLECORP" -ForestMode "Win2012R2" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$false -SysvolPath "C:\Windows\SYSVOL" -Force:$true -SafeModeAdministratorPassword $domainAdminPw
         #Remove-DnsServerForwarder -IPAddress 10.0.0.8 -PassThru
     }
 }
-function InstallandJoinIISNode($domainName){
-    $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
-    $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw
-    Invoke-Command -ComputerName samplecorpiis.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $domainName -ScriptBlock {
-        param($domainName)
-        $domainUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
-        $domainCred = New-Object -TypeName pscredential -ArgumentList "$domainName\sampleCorpAdmin", $domainUserPw
+function InstallandJoinIISNode(){
+    param(
+        # Parameter help description
+        [Parameter(Mandatory=$true)]
+        [string]
+        $domainName,
+        [Parameter(Mandatory=$true)]
+        $clientCred,
+        [Parameter(Mandatory=$true)]
+        $domainCred
+    )
+    Invoke-Command -ComputerName samplecorpiis.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $domainName, $domainCred  -ScriptBlock {
+        param($domainName, $domainCred)
         add-windowsfeature Web-Server, Web-Security, Web-Filtering, Web-Windows-Auth, Web-Common-Http, Web-Http-Errors, Web-Static-Content, Web-Http-Redirect, Web-App-Dev, Web-Net-Ext, Web-Net-Ext45, Web-ASP, Web-Asp-Net, Web-Asp-Net45, Web-Mgmt-Console
         while ((Test-Connection -ComputerName $domainName -Quiet) -eq $false){ Start-Sleep -Seconds 5 }
         Add-Computer -DomainName $domainName -Credential $domainCred -Restart -Force
     }
 }
-function JoinSqlNode($domainName){
-    $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
-    $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw
-    Invoke-Command -ComputerName samplecorpsql.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $domainName -ScriptBlock {
-        param($domainName)
-        $domainUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
-        $domainCred = New-Object -TypeName pscredential -ArgumentList "$domainName\sampleCorpAdmin", $domainUserPw
+function JoinSqlNode( ){
+    param(
+        # Parameter help description
+        [Parameter(Mandatory=$true)]
+        [string]
+        $domainName,
+        [Parameter(Mandatory=$true)]
+        $clientCred,
+        [Parameter(Mandatory=$true)]
+        $domainCred
+    )
+    Invoke-Command -ComputerName samplecorpsql.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $domainName, $domainCred -ScriptBlock {
+        param($domainName, $domainCred)
         while ((Test-Connection -ComputerName $domainName -Quiet) -eq $false){ Start-Sleep -Seconds 5 }
         Add-Computer -DomainName $domainName -Credential $domainCred -Restart -Force
     }
 }
-
+# Prepare Environment
 import-module AzureRM
 $pass = ConvertTo-SecureString "YN5/u2KC0EwiwOoLGqiaGByHvB3DrFrlqKTSbAiAKw0=" -AsPlainText -Force
 #Service Principal ID is defined in Azure Automation - Auszuführendes Konto
@@ -389,15 +398,19 @@ $cred = New-Object -TypeName pscredential -ArgumentList "95229bfc-64b4-479c-be59
 Login-AzureRmAccount -Credential $cred -ServicePrincipal -TenantId "38e69ad1-2007-434c-880e-4f9c1c98ac4b" -SubscriptionId "9bc20da0-8454-4a4e-ae08-ada2180eb46e"
 $ResourceGroupName = "SampleCorp"
 $domainName = "samplecorp.local"
+$StorageType = "Standard_GRS"
+$clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
+$clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw
+$domainCred = New-Object -TypeName pscredential -ArgumentList "$domainName\sampleCorpAdmin", $clientUserPw
 
 # Deploy resource group and vm's
 $Location = "NorthEurope"
 $resGroup = New-AzureRmResourceGroup -Name $ResourceGroupName -Location $Location
-CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "dc" -Location $Location
-CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "iis" -Location $Location
-CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "sql" -Location $Location
+CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "dc" -Location $Location -ClientCred $clientCred
+CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "iis" -Location $Location -ClientCred $clientCred
+CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "sql" -Location $Location -ClientCred $clientCred
 
-InstallADNode -domainName $domainName
+InstallADNode -domainName $domainName -ClientCred $clientCred -domainAdminPw $clientUserPw
 # Set DNS Server for virtual network
 $VNetName = "VNet09"
 $VNet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName
@@ -414,7 +427,7 @@ while ($winRmCheck -eq $null){
 }
 
 Start-Sleep -Seconds 60
-InstallandJoinIISNode -domainName $domainName
-JoinSqlNode -domainName $domainName
+InstallandJoinIISNode -domainName $domainName -domainCred $domainCred -clientCred $clientCred
+JoinSqlNode -domainName $domainName -domainCred $domainCred -clientCred $clientCred
 
 #Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
