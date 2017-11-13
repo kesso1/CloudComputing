@@ -389,6 +389,26 @@ function JoinSqlNode( ){
         Add-Computer -DomainName $domainName -Credential $domainCred -Restart -Force
     }
 }
+function AddDomainAdminLoginToSql(){
+    param(
+        [Parameter(Mandatory=$true)]
+        $clientCred,
+        [Parameter(Mandatory=$true)]
+        $serverName,
+        [Parameter(Mandatory=$true)]
+        $domainAdminName
+    )
+    Invoke-Command -ComputerName samplecorpsql.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $serverName, $domainAdminName -ScriptBlock {
+        [System.Reflection.Assembly]::LoadWithPartialName('Microsoft.SqlServer.SMO') | Out-Null
+        $sqlSrv = New-Object 'Microsoft.SqlServer.Management.Smo.Server' ($serverName)
+        $login = New-Object -TypeName Microsoft.SqlServer.Management.Smo.Login -ArgumentList $sqlSrv, $domainAdminName
+        $login.LoginType = 'WindowsUser'
+        $login.PasswordExpirationEnabled = $false
+        $login.Create()
+        $login.AddToRole('sysadmin')
+        $login.Alter()
+    }
+}
 # Prepare Environment
 import-module AzureRM
 $pass = ConvertTo-SecureString "YN5/u2KC0EwiwOoLGqiaGByHvB3DrFrlqKTSbAiAKw0=" -AsPlainText -Force
@@ -401,6 +421,8 @@ $domainName = "samplecorp.local"
 $StorageType = "Standard_GRS"
 $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
 $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw
+$domainAdminName = "samplecorp\sampleCorpAdmin"
+$sqlServerName = "vm-2017sql"
 $domainCred = New-Object -TypeName pscredential -ArgumentList "$domainName\sampleCorpAdmin", $clientUserPw
 
 # Deploy resource group and vm's
@@ -429,5 +451,5 @@ while ($winRmCheck -eq $null){
 Start-Sleep -Seconds 60
 InstallandJoinIISNode -domainName $domainName -domainCred $domainCred -clientCred $clientCred
 JoinSqlNode -domainName $domainName -domainCred $domainCred -clientCred $clientCred
-
+AddDomainAdminLoginToSql -domainAdminName $domainAdminName -serverName $sqlServerName
 #Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
