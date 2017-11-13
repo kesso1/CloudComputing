@@ -345,7 +345,7 @@ Function CreateVMs(){
     
 }
 
-function InstallAD($domainName){
+function InstallADNode($domainName){
     #Install ADDS Role
     $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
     $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw 
@@ -357,7 +357,7 @@ function InstallAD($domainName){
         #Remove-DnsServerForwarder -IPAddress 10.0.0.8 -PassThru
     }
 }
-function InstallIIS($domainName){
+function InstallandJoinIISNode($domainName){
     $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
     $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw
     Invoke-Command -ComputerName samplecorpiis.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $domainName -ScriptBlock {
@@ -365,6 +365,17 @@ function InstallIIS($domainName){
         $domainUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
         $domainCred = New-Object -TypeName pscredential -ArgumentList "$domainName\sampleCorpAdmin", $domainUserPw
         add-windowsfeature Web-Server, Web-Security, Web-Filtering, Web-Windows-Auth, Web-Common-Http, Web-Http-Errors, Web-Static-Content, Web-Http-Redirect, Web-App-Dev, Web-Net-Ext, Web-Net-Ext45, Web-ASP, Web-Asp-Net, Web-Asp-Net45, Web-Mgmt-Console
+        while ((Test-Connection -ComputerName $domainName -Quiet) -eq $false){ Start-Sleep -Seconds 5 }
+        Add-Computer -DomainName $domainName -Credential $domainCred -Restart -Force
+    }
+}
+function JoinSqlNode($domainName){
+    $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
+    $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw
+    Invoke-Command -ComputerName samplecorpsql.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $domainName -ScriptBlock {
+        param($domainName)
+        $domainUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
+        $domainCred = New-Object -TypeName pscredential -ArgumentList "$domainName\sampleCorpAdmin", $domainUserPw
         while ((Test-Connection -ComputerName $domainName -Quiet) -eq $false){ Start-Sleep -Seconds 5 }
         Add-Computer -DomainName $domainName -Credential $domainCred -Restart -Force
     }
@@ -384,9 +395,9 @@ $Location = "NorthEurope"
 $resGroup = New-AzureRmResourceGroup -Name $ResourceGroupName -Location $Location
 CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "dc" -Location $Location
 CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "iis" -Location $Location
-# CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "sql" -Location $Location
+CreateVMs -ResourceGroupName $ResourceGroupName -vmRole "sql" -Location $Location
 
-InstallAD -domainName $domainName
+InstallADNode -domainName $domainName
 # Set DNS Server for virtual network
 $VNetName = "VNet09"
 $VNet = Get-AzureRmVirtualNetwork -Name $VNetName -ResourceGroupName $ResourceGroupName
@@ -401,9 +412,9 @@ Get-AzureRmVM -ResourceGroupName $ResourceGroupName | % {
 while ($winRmCheck -eq $null){
 	$winRmCheck = Test-WSMan -Computername "samplecorpiis.northeurope.cloudapp.azure.com" -ErrorAction Ignore
 }
-Write-host "Trying to install IIS and join domain..."
+
 Start-Sleep -Seconds 60
-InstallIIS -domainName $domainName
-Write-host "IIS install / domain join done"
+InstallandJoinIISNode -domainName $domainName
+JoinSqlNode -domainName $domainName
 
 #Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
