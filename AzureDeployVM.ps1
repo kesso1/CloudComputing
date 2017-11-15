@@ -234,7 +234,7 @@ function Invoke-AzureRmVmScript {
         }
     }
 }
-Function CreateVMs(){
+function CreateVMs(){
     param(
         # Parameter help description
         [Parameter(Mandatory=$true)]
@@ -333,7 +333,6 @@ Function CreateVMs(){
     }    
     
 }
-
 function InstallADNode(){
     #Install ADDS Role
     param(
@@ -399,14 +398,12 @@ function AddDomainAdminLoginToSql(){
         $domainAdminName
     )
     Invoke-Command -ComputerName samplecorpsql.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $serverName, $domainAdminName -ScriptBlock {
-        [System.Reflection.Assembly]::LoadWithPartialName('Microsoft.SqlServer.SMO') | Out-Null
-        $sqlSrv = New-Object 'Microsoft.SqlServer.Management.Smo.Server' ($serverName)
-        $login = New-Object -TypeName Microsoft.SqlServer.Management.Smo.Login -ArgumentList $sqlSrv, $domainAdminName
-        $login.LoginType = 'WindowsUser'
-        $login.PasswordExpirationEnabled = $false
-        $login.Create()
-        $login.AddToRole('sysadmin')
-        $login.Alter()
+        param($serverName, $domainAdminName)
+        Invoke-Command -ComputerName samplecorpsql.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $serverName, $domainAdminName -ScriptBlock {
+            param($serverName, $domainAdminName)
+            [System.Reflection.Assembly]::LoadWithPartialName('Microsoft.SqlServer.SMO') | Out-Null
+            Invoke-Sqlcmd -Query "CREATE LOGIN [$domainAdminName] FROM WINDOWS; EXEC sp_addsrvrolemember @loginame = N'$domainAdminName', @rolename = N'sysadmin'" -ServerInstance $serverName
+        }
     }
 }
 # Prepare Environment
@@ -447,9 +444,9 @@ Get-AzureRmVM -ResourceGroupName $ResourceGroupName | % {
 while ($winRmCheck -eq $null){
 	$winRmCheck = Test-WSMan -Computername "samplecorpiis.northeurope.cloudapp.azure.com" -ErrorAction Ignore
 }
-
 Start-Sleep -Seconds 60
 InstallandJoinIISNode -domainName $domainName -domainCred $domainCred -clientCred $clientCred
 JoinSqlNode -domainName $domainName -domainCred $domainCred -clientCred $clientCred
-AddDomainAdminLoginToSql -domainAdminName $domainAdminName -serverName $sqlServerName
+Start-Sleep -Seconds 60
+AddDomainAdminLoginToSql -domainAdminName $domainAdminName -serverName $sqlServerName -clientCred $clientCred
 #Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
