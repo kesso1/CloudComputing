@@ -399,11 +399,7 @@ function AddDomainAdminLoginToSql(){
     )
     Invoke-Command -ComputerName samplecorpsql.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $serverName, $domainAdminName -ScriptBlock {
         param($serverName, $domainAdminName)
-        Invoke-Command -ComputerName samplecorpsql.northeurope.cloudapp.azure.com -Credential $clientCred -ArgumentList $serverName, $domainAdminName -ScriptBlock {
-            param($serverName, $domainAdminName)
-            [System.Reflection.Assembly]::LoadWithPartialName('Microsoft.SqlServer.SMO') | Out-Null
-            Invoke-Sqlcmd -Query "CREATE LOGIN [$domainAdminName] FROM WINDOWS; EXEC sp_addsrvrolemember @loginame = N'$domainAdminName', @rolename = N'sysadmin'" -ServerInstance $serverName
-        }
+        Invoke-Sqlcmd -Query "CREATE LOGIN [$domainAdminName] FROM WINDOWS; EXEC sp_addsrvrolemember @loginame = N'$domainAdminName', @rolename = N'sysadmin'" -ServerInstance $serverName
     }
 }
 # Prepare Environment
@@ -419,7 +415,7 @@ $StorageType = "Standard_GRS"
 $clientUserPw = ConvertTo-SecureString "1234%%abcd" -AsPlainText -Force
 $clientCred = New-Object -TypeName pscredential -ArgumentList "sampleCorpAdmin", $clientUserPw
 $domainAdminName = "samplecorp\sampleCorpAdmin"
-$sqlServerName = "vm-2017sql"
+$sqlServerName = "server-2017sql"
 $domainCred = New-Object -TypeName pscredential -ArgumentList "$domainName\sampleCorpAdmin", $clientUserPw
 
 # Deploy resource group and vm's
@@ -440,13 +436,12 @@ Set-AzureRmVirtualNetwork -VirtualNetwork $VNet
 Get-AzureRmVM -ResourceGroupName $ResourceGroupName | % {
     Restart-AzureRmVM -ResourceGroupName $ResourceGroupName -Name $_.Name
 }
+
 # Wait for WinRM Service IIS
-while ($winRmCheck -eq $null){
-	$winRmCheck = Test-WSMan -Computername "samplecorpiis.northeurope.cloudapp.azure.com" -ErrorAction Ignore
-}
 Start-Sleep -Seconds 60
 InstallandJoinIISNode -domainName $domainName -domainCred $domainCred -clientCred $clientCred
 JoinSqlNode -domainName $domainName -domainCred $domainCred -clientCred $clientCred
+# Wait for SQL to reboot after domain Join
 Start-Sleep -Seconds 60
 AddDomainAdminLoginToSql -domainAdminName $domainAdminName -serverName $sqlServerName -clientCred $clientCred
 #Remove-AzureRmResourceGroup -Name $ResourceGroupName -Force
